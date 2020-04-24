@@ -1,0 +1,2 @@
+class1 1200 Sunny 90
+class2 1100 Li 100
