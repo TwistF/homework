@@ -1,0 +1,1435 @@
+********************************
+tensorflow.saturate_cast()ai-platform
+def _legacy_output_transform_func(*expr, out_mul=1.0, out_add=0.0, out_shrink=1, out_dtype=None):
+    if out_mul != 1.0:
+        expr = [x * out_mul for x in expr]
+
+    if out_add != 0.0:
+        expr = [x + out_add for x in expr]
+
+    if out_shrink > 1:
+        ksize = [1, 1, out_shrink, out_shrink]
+        expr = [tf.nn.avg_pool(x, ksize=ksize, strides=ksize, padding="VALID", data_format="NCHW") for x in expr]
+
+    if out_dtype is not None:
+        if tf.as_dtype(out_dtype).is_integer:
+            expr = [tf.round(x) for x in expr]
+        expr = [tf.saturate_cast(x, out_dtype) for x in expr]
+    return expr 
+
+
+onnx-tensorflow
+def version_10(cls, node, **kwargs):
+    tensor_dict = kwargs["tensor_dict"]
+    x = tensor_dict[node.inputs[0]]
+    y_scale = tensor_dict[node.inputs[1]]
+
+    x = tf.cast(x, tf.float32)
+    y = tf.divide(x, y_scale)
+    y = tf.round(y)
+    if len(node.inputs) == 3:
+      y_zero_point = tensor_dict[node.inputs[2]]
+      y_dtype = y_zero_point.dtype
+      y_zero_point = tf.cast(y_zero_point, tf.float32)
+      y = tf.add(y, y_zero_point)
+    else: # y_zero_point default dtype = uint8
+      y_dtype = tf.uint8
+
+    y = tf.saturate_cast(y, y_dtype)
+
+    return [y] 
+
+
+ml_gans
+def build_summaries(network):
+    """
+    """
+    summaries = {}
+
+    real = network['real']
+    fake = network['fake']
+    cute = network['ae_output_fake']
+
+    image = tf.concat([real, fake, cute], axis=0)
+
+    grid = tf.reshape(image, [1, 3 * FLAGS.image_size, FLAGS.image_size, 3])
+    grid = tf.split(grid, 3, axis=1)
+    grid = tf.concat(grid, axis=2)
+    grid = tf.saturate_cast(grid * 127.5 + 127.5, tf.uint8)
+
+    summaries['comparison'] = tf.summary.image('comp', grid, max_outputs=4)
+
+    return summaries 
+
+
+ml_gans
+def build_summaries(gan_graph):
+    """
+    """
+    generator_loss_summary = tf.summary.scalar(
+        'generator loss', gan_graph['generator_loss'])
+
+    discriminator_loss_summary = tf.summary.scalar(
+        'discriminator loss', gan_graph['discriminator_loss'])
+
+    fake_grid = tf.reshape(gan_graph['generator_fake'], [1, 64 * 64, 64, 3])
+    fake_grid = tf.split(fake_grid, 8, axis=1)
+    fake_grid = tf.concat(fake_grid, axis=2)
+    fake_grid = tf.saturate_cast(fake_grid * 127.5 + 127.5, tf.uint8)
+
+    generator_fake_summary = tf.summary.image(
+        'generated image', fake_grid, max_outputs=1)
+
+    return {
+        'generated_png': tf.image.encode_png(fake_grid[0]),
+        'generator_fake_summary': generator_fake_summary,
+        'generator_loss_summary': generator_loss_summary,
+        'discriminator_loss_summary': discriminator_loss_summary,
+    } 
+
+
+ml_gans
+def build_summaries(gan_graph):
+    """
+    """
+    generator_loss_summary = tf.summary.scalar(
+        'generator loss', gan_graph['generator_loss'])
+
+    discriminator_loss_summary = tf.summary.scalar(
+        'discriminator loss', gan_graph['discriminator_loss'])
+
+    fake_grid = tf.reshape(gan_graph['generator_fake'], [1, 64 * 32, 32, 1])
+    fake_grid = tf.split(fake_grid, 8, axis=1)
+    fake_grid = tf.concat(fake_grid, axis=2)
+    fake_grid = tf.saturate_cast(fake_grid * 127.5 + 127.5, tf.uint8)
+
+    generator_fake_summary = tf.summary.image(
+        'generated image', fake_grid, max_outputs=18)
+
+    return {
+        'generator_fake_summary': generator_fake_summary,
+        'generator_loss_summary': generator_loss_summary,
+        'discriminator_loss_summary': discriminator_loss_summary,
+    } 
+
+
+ml_gans
+def build_summaries(gan):
+    """
+    """
+    generator_loss_summary = tf.summary.scalar(
+        'generator loss', gan['generator_loss'])
+
+    discriminator_loss_summary = tf.summary.scalar(
+        'discriminator loss', gan['discriminator_loss'])
+
+    fake_grid = tf.reshape(gan['generator_fake'], [1, 64 * 32, 32, 1])
+    fake_grid = tf.split(fake_grid, 8, axis=1)
+    fake_grid = tf.concat(fake_grid, axis=2)
+    fake_grid = tf.saturate_cast(fake_grid * 127.5 + 127.5, tf.uint8)
+
+    generator_fake_summary = tf.summary.image(
+        'generated image', fake_grid, max_outputs=18)
+
+    return {
+        'generator_fake_summary': generator_fake_summary,
+        'generator_loss_summary': generator_loss_summary,
+        'discriminator_loss_summary': discriminator_loss_summary,
+    } 
+
+
+OpenSeq2Seq
+def apply_gradients(self, grads_and_vars, global_step=None, name=None):
+    def apply_ops_wrapper():
+      update_op = self._optimizer.apply_gradients(grads_and_vars,
+                                                  global_step, name)
+      apply_ops = []
+      with tf.control_dependencies([update_op]):
+        for grad, var in grads_and_vars:
+          if var.name in self._fp32_to_fp16:
+            dst_var = self._fp32_to_fp16[var.name]
+            apply_ops.append(
+                tf.assign(dst_var, tf.saturate_cast(var, tf.float16))
+            )
+      if apply_ops:
+        return tf.group(apply_ops)
+      return update_op
+
+    if self._loss_scaler:
+      grad_has_nans, grad_amax = AutomaticLossScaler.check_grads(grads_and_vars)
+      should_skip_update = tf.logical_or(tf.is_inf(grad_amax), grad_has_nans)
+      loss_scale_update_op = self._loss_scaler.update_op(grad_has_nans,
+                                                         grad_amax)
+      with tf.control_dependencies([loss_scale_update_op]):
+        return tf.cond(should_skip_update, tf.no_op, apply_ops_wrapper)
+    else:
+      return apply_ops_wrapper() 
+
+
+OpenSeq2Seq
+def get_decoder_self_attention_bias(length, dtype=tf.float32):
+  """Calculate bias for decoder that maintains model's autoregressive property.
+
+  Creates a tensor that masks out locations that correspond to illegal
+  connections, so prediction at position i cannot draw information from future
+  positions.
+
+  Args:
+    length: int length of sequences in batch.
+
+  Returns:
+    float tensor of shape [1, 1, length, length]
+  """
+  #print("get_decoder_self_attention_bias", dtype)
+
+  with tf.name_scope("decoder_self_attention_bias"):
+    #valid_locs = tf.matrix_band_part(tf.ones([length, length], dtype=dtype), -1, 0)
+    valid_locs = tf.matrix_band_part(tf.ones([length, length], dtype=tf.float32), -1, 0)
+    valid_locs = tf.reshape(valid_locs, [1, 1, length, length])
+    neg_inf=_NEG_INF #if (dtype==tf.float32) else _NEG_INF_FP16
+    bias = neg_inf * (1.0 - valid_locs)
+    #bias=tf.saturate_cast(bias, dtype=dtype)
+  return bias 
+
+
+OpenSeq2Seq
+def call(self, x):
+    if self.norm_type=="layernorm_L2":
+      epsilon = self.epsilon
+      dtype = x.dtype
+      x = tf.cast(x=x, dtype=tf.float32)
+      mean = tf.reduce_mean(x, axis=[-1], keepdims=True)
+      variance = tf.reduce_mean(tf.square(x - mean), axis=[-1], keepdims=True)
+      norm_x = (x - mean) * tf.rsqrt(variance + epsilon)
+      result = norm_x * self.scale + self.bias
+      return tf.cast(x=result, dtype=dtype)
+
+    else:
+      dtype = x.dtype
+      if dtype==tf.float16:
+        x = tf.cast(x, dtype=tf.float32)
+      mean = tf.reduce_mean(x, axis=[-1], keepdims=True)
+      x = x - mean
+      variance = tf.reduce_mean(tf.abs(x), axis=[-1], keepdims=True)
+      norm_x = tf.div(x , variance + self.epsilon)
+      y = norm_x * self.scale + self.bias
+      if dtype == tf.float16:
+        y = tf.saturate_cast(y, dtype)
+      return y 
+
+
+InterFaceGAN
+def _legacy_output_transform_func(*expr, out_mul=1.0, out_add=0.0, out_shrink=1, out_dtype=None):
+    if out_mul != 1.0:
+        expr = [x * out_mul for x in expr]
+
+    if out_add != 0.0:
+        expr = [x + out_add for x in expr]
+
+    if out_shrink > 1:
+        ksize = [1, 1, out_shrink, out_shrink]
+        expr = [tf.nn.avg_pool(x, ksize=ksize, strides=ksize, padding="VALID", data_format="NCHW") for x in expr]
+
+    if out_dtype is not None:
+        if tf.as_dtype(out_dtype).is_integer:
+            expr = [tf.round(x) for x in expr]
+        expr = [tf.saturate_cast(x, out_dtype) for x in expr]
+    return expr 
+
+
+generative-attribution-methods
+def __init__(self, batch_size, checkpoint_dir):
+        self.model = InpaintCAModel()
+        self.images_ph = tf.placeholder(tf.float32,
+                                        shape=[batch_size, 256, 512, 3])
+
+        # with tf.device('/gpu:0'):
+        # with tf.device('/cpu:0'):
+        # for i, d in enumerate(['/gpu:0', '/gpu:1', '/gpu:2', '/gpu:3']):
+        #     with tf.device(d):
+        output = self.model.build_server_graph(self.images_ph)
+        output = (output + 1.) * 127.5
+        output = tf.reverse(output, [-1])
+        output = tf.saturate_cast(output, tf.uint8)
+        self.output = output
+
+        # load pretrained model
+        vars_list = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES)
+        self.assign_ops = []
+        for var in vars_list:
+            vname = var.name
+            from_name = vname
+            var_value = tf.contrib.framework.load_variable(checkpoint_dir, from_name)
+            self.assign_ops.append(tf.assign(var, var_value))
+        # print('Model loaded.')
+
+        self.pth_mean = np.ones((1, 3, 1, 1), dtype='float32')
+        self.pth_mean[0, :, 0, 0] = np.array([0.485, 0.456, 0.406])
+        self.pth_std = np.ones((1, 3, 1, 1), dtype='float32')
+        self.pth_std[0, :, 0, 0] = np.array([0.229, 0.224, 0.225])
+        self.upsample = torch.nn.Upsample(size=(256, 256), mode='bilinear')
+        self.downsample = torch.nn.Upsample(size=(224, 224), mode='bilinear')
+
+        # Create a session
+        sess_config = tf.ConfigProto()
+        sess_config.gpu_options.allow_growth = True
+        # sess_config.allow_soft_placement = True
+        # sess_config.log_device_placement = True
+        self.sess = tf.Session(config=sess_config)
+
+        self.sess.run(self.assign_ops) 
+
+
+ai-platform
+def convert_images_to_uint8(images, drange=[-1,1], nchw_to_nhwc=False, shrink=1):
+    """Convert a minibatch of images from float32 to uint8 with configurable dynamic range.
+    Can be used as an output transformation for Network.run().
+    """
+    images = tf.cast(images, tf.float32)
+    if shrink > 1:
+        ksize = [1, 1, shrink, shrink]
+        images = tf.nn.avg_pool(images, ksize=ksize, strides=ksize, padding="VALID", data_format="NCHW")
+    if nchw_to_nhwc:
+        images = tf.transpose(images, [0, 2, 3, 1])
+    scale = 255 / (drange[1] - drange[0])
+    images = images * scale + (0.5 - drange[0] * scale)
+    return tf.saturate_cast(images, tf.uint8) 
+
+
+ml_super_resolution
+def encode_image(tensors):
+    """
+    encode a single image (sd/sr/residual)
+    """
+    img_tensor = tf.squeeze(tensors, [0])
+
+    png_tensor = tf.saturate_cast(img_tensor * 127.5 + 127.5, tf.uint8)
+
+    png_tensor = tf.image.encode_png(png_tensor)
+
+    return png_tensor 
+
+
+ml_super_resolution
+def encode_feature_map(tensors):
+    """
+    """
+    # NOTE: arXiv:1511.04587v2, accurate image super-resolution using very deep
+    #       convolutional networks, 3.1
+    #
+    #       we use d layers where layers except the first and the last are of
+    #       the same type: 64 filters of the size 3x3x64 where a filter
+    #       operates on 3x3 spatial region across 64 channels (feature maps).
+    shape = tf.shape(tensors)
+
+    h, w, c = shape[1], shape[2], shape[3]
+
+    feature_tensors = tf.squeeze(tensors, [0])
+
+    # NOTE: split to results of 64 filters
+    feature_tensors = tf.split(feature_tensors, 64, axis=-1)
+
+    # NOTE: concat to build rows
+    feature_tensors = \
+        [tf.concat(feature_tensors[i:i+8], axis=1) for i in range(0, 64, 8)]
+
+    # NOTE: concat to build entire map
+    feature_tensors = tf.concat(feature_tensors, axis=0)
+
+    # NOTE: encode as png
+    png_tensor = tf.saturate_cast(feature_tensors * 127.5 + 127.5, tf.uint8)
+
+    png_tensor = tf.image.encode_png(png_tensor)
+
+    return png_tensor 
+
+
+ml_super_resolution
+def build_summaries(model):
+    """
+    """
+    FLAGS = tf.app.flags.FLAGS
+
+    # NOTE: loss summaries
+    summary_step = tf.summary.scalar('loss', model['loss'])
+
+    # NOTE: build image summary
+    sd_images = model['sd_images']
+    sr_images = model['sr_images']
+    hd_images = model['hd_images']
+
+    images = tf.concat([sd_images, sr_images, hd_images], axis=2)
+
+    images = tf.reshape(
+        images,
+        [1, FLAGS.batch_size * FLAGS.image_size, 3 * FLAGS.image_size, 3])
+
+    images = tf.saturate_cast(images * 127.5 + 127.5, tf.uint8)
+
+    summary_image = tf.summary.image('sd_sr_hd', images, max_outputs=4)
+
+    # NOTE: build psnr summary
+    psnrs = tf.image.psnr(sr_images, hd_images, max_val=2.0)
+
+    psnrs = tf.reduce_mean(psnrs)
+
+    summary_psnr = tf.summary.scalar('psnr', psnrs)
+
+    summary_epoch = tf.summary.merge(
+        [summary_step, summary_image, summary_psnr])
+
+    return {
+        'step': summary_step,
+        'epoch': summary_epoch,
+    } 
+
+
+ml_super_resolution
+def super_resolution():
+    """
+    """
+    ckpt_source_path = tf.train.latest_checkpoint(FLAGS.ckpt_dir_path)
+
+    srcnn = build_srcnn()
+
+    images = build_sr_result(srcnn)
+
+    image = tf.saturate_cast((images[0] + 1.0) * 127.5, dtype=tf.uint8)
+
+    image = tf.image.encode_jpeg(image)
+
+    image = tf.write_file(FLAGS.sr_target_path, image)
+
+    with tf.Session() as session:
+        tf.train.Saver().restore(session, ckpt_source_path)
+
+        # make dataset reader work
+        coord = tf.train.Coordinator()
+        threads = tf.train.start_queue_runners(coord=coord)
+
+        session.run(image)
+
+        coord.request_stop()
+        coord.join(threads) 
+
+
+ml_super_resolution
+def build_summaries(model):
+    """
+    """
+    FLAGS = tf.app.flags.FLAGS
+
+    summary_loss = tf.summary.scalar('loss', model['loss'])
+
+    # NOTE: build sr_patch + hr_patch summary
+    batch_size = FLAGS.batch_size
+    lr_patch_size = FLAGS.lr_patch_size
+    scaling_factor = FLAGS.scaling_factor
+
+    sr_patches = model['sr_result']
+    hr_patches = model['hr_target']
+
+    cmp_images = tf.concat([sr_patches, hr_patches], axis=2)
+
+    shape = [
+        1, batch_size * lr_patch_size * scaling_factor, scaling_factor, 3]
+
+    sub_images = tf.split(cmp_images, 2 * lr_patch_size, axis=2)
+
+    sub_images = [tf.reshape(img, shape) for img in sub_images]
+
+    cmp_images = tf.concat(sub_images, axis=2)
+
+    cmp_images = tf.saturate_cast(cmp_images * 127.5 + 127.5, tf.uint8)
+
+    summary_patches = tf.summary.image('patches', cmp_images, max_outputs=1)
+
+    return {
+        'summary_loss': summary_loss,
+        'summary_patches': summary_patches,
+    } 
+
+
+ml_gans
+def build_image_grid(image_batch, row, col):
+    """
+    Build an image grid from an image batch.
+    """
+    image_size = FLAGS.image_size
+
+    grid = tf.reshape(
+        image_batch, [1, row * col * image_size, image_size, 3])
+    grid = tf.split(grid, col, axis=1)
+    grid = tf.concat(grid, axis=2)
+    grid = tf.saturate_cast(grid * 127.5 + 127.5, tf.uint8)
+    grid = tf.reshape(grid, [row * image_size, col * image_size, 3])
+
+    return grid 
+
+
+ml_gans
+def reshape_batch_images(batch_images):
+    """
+    """
+    batch_size = FLAGS.batch_size
+    image_size = FLAGS.image_size
+
+    # build summary for generated fake images.
+    grid = \
+        tf.reshape(batch_images, [1, batch_size * image_size, image_size, 3])
+    grid = tf.split(grid, FLAGS.summary_row_size, axis=1)
+    grid = tf.concat(grid, axis=2)
+    grid = tf.saturate_cast(grid * 127.5 + 127.5, tf.uint8)
+
+    return grid 
+
+
+ml_gans
+def build_summaries(model):
+    """
+    """
+    images_summary = []
+
+    generations = [
+        ('summary_x_gx', 'xx_real', 'gx_fake'),
+        ('summary_y_fy', 'yy_real', 'fy_fake')]
+
+    for g in generations:
+        images = tf.concat([model[g[1]], model[g[2]]], axis=2)
+
+        images = tf.reshape(images, [1, FLAGS.batch_size * 256, 512, 3])
+
+        images = tf.saturate_cast(images * 127.5 + 127.5, tf.uint8)
+
+        summary = tf.summary.image(g[0], images, max_outputs=4)
+
+        images_summary.append(summary)
+
+    #
+    summary_loss_d = tf.summary.scalar('d', model['loss_d'])
+    summary_loss_dx = tf.summary.scalar('dx', model['loss_dx'])
+    summary_loss_dy = tf.summary.scalar('dy', model['loss_dy'])
+    summary_d = \
+        tf.summary.merge([summary_loss_d, summary_loss_dx, summary_loss_dy])
+
+    summary_loss_g = tf.summary.scalar('g', model['loss_g'])
+    summary_loss_gx = tf.summary.scalar('gx', model['loss_gx'])
+    summary_loss_fy = tf.summary.scalar('fy', model['loss_fy'])
+    summary_g = \
+        tf.summary.merge([summary_loss_g, summary_loss_gx, summary_loss_fy])
+
+    return {
+        'images': tf.summary.merge(images_summary),
+        'loss_d': summary_d,
+        'loss_g': summary_g,
+    } 
+
+
+ml_gans
+def translate():
+    """
+    """
+    image_path_pairs = prepare_paths()
+
+    reals = tf.placeholder(shape=[None, 256, 256, 3], dtype=tf.uint8)
+
+    flow = tf.cast(reals, dtype=tf.float32) / 127.5 - 1.0
+
+    model = build_cycle_gan(flow, flow, FLAGS.mode)
+
+    fakes = tf.saturate_cast(model['fake'] * 127.5 + 127.5, tf.uint8)
+
+    # path to checkpoint
+    ckpt_source_path = tf.train.latest_checkpoint(FLAGS.ckpt_dir_path)
+
+    with tf.Session() as session:
+        session.run(tf.global_variables_initializer())
+        session.run(tf.local_variables_initializer())
+
+        tf.train.Saver().restore(session, ckpt_source_path)
+
+        for i in range(0, len(image_path_pairs), FLAGS.batch_size):
+            path_pairs = image_path_pairs[i:i+FLAGS.batch_size]
+
+            real_images = [scipy.misc.imread(p[0]) for p in path_pairs]
+
+            fake_images = session.run(fakes, feed_dict={reals: real_images})
+
+            for idx, path in enumerate(path_pairs):
+                image = np.concatenate(
+                    [real_images[idx], fake_images[idx]], axis=1)
+
+                scipy.misc.imsave(path[1], image) 
+
+
+ml_gans
+def build_output(model):
+    """
+    save translation result to FLAGS.target_image_path.
+    """
+    images = tf.concat(
+        [model['source_images'], model['output_images']], axis=2)
+
+    images = tf.reshape(images, [FLAGS.batch_size * 256, 512, 3])
+
+    images = tf.saturate_cast(images * 127.5 + 127.5, tf.uint8)
+
+    images = tf.image.encode_png(images)
+
+    return tf.write_file(FLAGS.target_image_path, images) 
+
+
+ml_styles
+def build_summaries(network):
+    """
+    """
+    # summary_loss = tf.summary.scalar('transfer loss', network['loss'])
+
+    images_c = network['image_content']
+    images_s = network['image_styled']
+
+    images_c = tf.slice(
+        images_c,
+        [0, FLAGS.padding, FLAGS.padding, 0],
+        [-1, 256, 256, -1])
+
+    images_s = tf.slice(
+        images_s,
+        [0, FLAGS.padding, FLAGS.padding, 0],
+        [-1, 256, 256, -1])
+
+    images_c = tf.reshape(images_c, [1, FLAGS.batch_size * 256, 256, 3])
+    images_s = tf.reshape(images_s, [1, FLAGS.batch_size * 256, 256, 3])
+
+    images_a = tf.concat([images_c, images_s], axis=2)
+    images_a = images_a * 127.5 + 127.5
+    # images_a = tf.add(images_a, VggNet.mean_color_bgr())
+    images_a = tf.reverse(images_a, [3])
+    images_a = tf.saturate_cast(images_a, tf.uint8)
+
+    summary_image = tf.summary.image('all', images_a, max_outputs=4)
+
+    # summary_plus = tf.summary.merge([summary_image, summary_loss])
+
+    return {
+        # 'summary_part': summary_loss,
+        'summary_plus': summary_image,
+    } 
+
+
+ml_styles
+def transfer_summary(vgg, loss, content_shape):
+    """
+    summaries of loss and result image.
+    """
+    image = tf.add(vgg.upstream, VggNet.mean_color_bgr())
+    image = tf.image.resize_images(image, content_shape)
+    image = tf.saturate_cast(image, tf.uint8)
+    image = tf.reverse(image, [3])
+
+    summary_image = tf.summary.image('generated image', image, max_outputs=1)
+
+    summary_loss = tf.summary.scalar('transfer loss', loss)
+
+    return tf.summary.merge([summary_image, summary_loss]) 
+
+
+deep_image_model
+def testSaturate(self):
+    in_types = tf.float32,
+    out_types = tf.int8, tf.uint8, tf.int16, tf.float32
+    with self.test_session() as sess:
+      for in_type in in_types:
+        for out_type in out_types:
+          lo, hi = in_type.min, in_type.max
+          x = tf.constant([lo, lo + 1, lo // 2, hi // 2, hi - 1, hi],
+                          dtype=in_type)
+          y = tf.saturate_cast(x, dtype=out_type)
+          self.assertEqual(y.dtype, out_type)
+          x, y = sess.run([x, y])
+          correct = np.maximum(out_type.min, np.minimum(out_type.max, x))
+          self.assertAllEqual(correct, y) 
+
+
+OpenSeq2Seq
+def _mu_law_encode(signal, channels, dtype):
+  mu = tf.saturate_cast(channels - 1, dtype)
+  safe_audio_abs = tf.minimum(tf.abs(signal), 1.0)
+  magnitude = tf.log1p(mu * safe_audio_abs) / tf.log1p(mu)
+  signal = tf.sign(signal) * magnitude
+  return tf.cast((signal + 1) / 2 * mu + 0.5, tf.int32) 
+
+
+InterFaceGAN
+def convert_images_to_uint8(images, drange=[-1,1], nchw_to_nhwc=False, shrink=1):
+    """Convert a minibatch of images from float32 to uint8 with configurable dynamic range.
+    Can be used as an output transformation for Network.run().
+    """
+    images = tf.cast(images, tf.float32)
+    if shrink > 1:
+        ksize = [1, 1, shrink, shrink]
+        images = tf.nn.avg_pool(images, ksize=ksize, strides=ksize, padding="VALID", data_format="NCHW")
+    if nchw_to_nhwc:
+        images = tf.transpose(images, [0, 2, 3, 1])
+    scale = 255 / (drange[1] - drange[0])
+    images = images * scale + (0.5 - drange[0] * scale)
+    return tf.saturate_cast(images, tf.uint8) 
+
+
+disentangling_conditional_gans
+def run(self, *in_arrays,
+        return_as_list  = False,    # True = return a list of NumPy arrays, False = return a single NumPy array, or a tuple if there are multiple outputs.
+        print_progress  = False,    # Print progress to the console? Useful for very large input arrays.
+        minibatch_size  = None,     # Maximum minibatch size to use, None = disable batching.
+        num_gpus        = 1,        # Number of GPUs to use.
+        out_mul         = 1.0,      # Multiplicative constant to apply to the output(s).
+        out_add         = 0.0,      # Additive constant to apply to the output(s).
+        out_shrink      = 1,        # Shrink the spatial dimensions of the output(s) by the given factor.
+        out_dtype       = None,     # Convert the output to the specified data type.
+        **dynamic_kwargs):          # Additional keyword arguments to pass into the network construction function.
+
+        assert len(in_arrays) == self.num_inputs
+        num_items = in_arrays[0].shape[0]
+        if minibatch_size is None:
+            minibatch_size = num_items
+        key = str([list(sorted(dynamic_kwargs.items())), num_gpus, out_mul, out_add, out_shrink, out_dtype])
+
+        # Build graph.
+        if key not in self._run_cache:
+            with absolute_name_scope(self.scope + '/Run'), tf.control_dependencies(None):
+                in_split = list(zip(*[tf.split(x, num_gpus) for x in self.input_templates]))
+                out_split = []
+                for gpu in range(num_gpus):
+                    with tf.device('/gpu:%d' % gpu):
+                        out_expr = self.get_output_for(*in_split[gpu], return_as_list=True, **dynamic_kwargs)
+                        if out_mul != 1.0:
+                            out_expr = [x * out_mul for x in out_expr]
+                        if out_add != 0.0:
+                            out_expr = [x + out_add for x in out_expr]
+                        if out_shrink > 1:
+                            ksize = [1, 1, out_shrink, out_shrink]
+                            out_expr = [tf.nn.avg_pool(x, ksize=ksize, strides=ksize, padding='VALID', data_format='NCHW') for x in out_expr]
+                        if out_dtype is not None:
+                            if tf.as_dtype(out_dtype).is_integer:
+                                out_expr = [tf.round(x) for x in out_expr]
+                            out_expr = [tf.saturate_cast(x, out_dtype) for x in out_expr]
+                        out_split.append(out_expr)
+                self._run_cache[key] = [tf.concat(outputs, axis=0) for outputs in zip(*out_split)]
+
+        # Run minibatches.
+        out_expr = self._run_cache[key]
+        out_arrays = [np.empty([num_items] + shape_to_list(expr.shape)[1:], expr.dtype.name) for expr in out_expr]
+        for mb_begin in range(0, num_items, minibatch_size):
+            if print_progress:
+                print('\r%d / %d' % (mb_begin, num_items), end='')
+            mb_end = min(mb_begin + minibatch_size, num_items)
+            mb_in = [src[mb_begin : mb_end] for src in in_arrays]
+            mb_out = tf.get_default_session().run(out_expr, dict(zip(self.input_templates, mb_in)))
+            for dst, src in zip(out_arrays, mb_out):
+                dst[mb_begin : mb_end] = src
+
+        # Done.
+        if print_progress:
+            print('\r%d / %d' % (num_items, num_items))
+        if not return_as_list:
+            out_arrays = out_arrays[0] if len(out_arrays) == 1 else tuple(out_arrays)
+        return out_arrays
+
+    # Returns a list of (name, output_expr, trainable_vars) tuples corresponding to
+    # individual layers of the network. Mainly intended to be used for reporting. 
+
+
+galaxy-generator
+def run(self, *in_arrays,
+        return_as_list  = False,    # True = return a list of NumPy arrays, False = return a single NumPy array, or a tuple if there are multiple outputs.
+        print_progress  = False,    # Print progress to the console? Useful for very large input arrays.
+        minibatch_size  = None,     # Maximum minibatch size to use, None = disable batching.
+        num_gpus        = 1,        # Number of GPUs to use.
+        out_mul         = 1.0,      # Multiplicative constant to apply to the output(s).
+        out_add         = 0.0,      # Additive constant to apply to the output(s).
+        out_shrink      = 1,        # Shrink the spatial dimensions of the output(s) by the given factor.
+        out_dtype       = None,     # Convert the output to the specified data type.
+        **dynamic_kwargs):          # Additional keyword arguments to pass into the network construction function.
+
+        assert len(in_arrays) == self.num_inputs
+        num_items = in_arrays[0].shape[0]
+        if minibatch_size is None:
+            minibatch_size = num_items
+        key = str([list(sorted(dynamic_kwargs.items())), num_gpus, out_mul, out_add, out_shrink, out_dtype])
+
+        # Build graph.
+        if key not in self._run_cache:
+            with absolute_name_scope(self.scope + '/Run'), tf.control_dependencies(None):
+                in_split = list(zip(*[tf.split(x, num_gpus) for x in self.input_templates]))
+                out_split = []
+                for gpu in range(num_gpus):
+                    with tf.device('/gpu:%d' % gpu):
+                        out_expr = self.get_output_for(*in_split[gpu], return_as_list=True, **dynamic_kwargs)
+                        if out_mul != 1.0:
+                            out_expr = [x * out_mul for x in out_expr]
+                        if out_add != 0.0:
+                            out_expr = [x + out_add for x in out_expr]
+                        if out_shrink > 1:
+                            ksize = [1, 1, out_shrink, out_shrink]
+                            out_expr = [tf.nn.avg_pool(x, ksize=ksize, strides=ksize, padding='VALID', data_format='NCHW') for x in out_expr]
+                        if out_dtype is not None:
+                            if tf.as_dtype(out_dtype).is_integer:
+                                out_expr = [tf.round(x) for x in out_expr]
+                            out_expr = [tf.saturate_cast(x, out_dtype) for x in out_expr]
+                        out_split.append(out_expr)
+                self._run_cache[key] = [tf.concat(outputs, axis=0) for outputs in zip(*out_split)]
+
+        # Run minibatches.
+        out_expr = self._run_cache[key]
+        out_arrays = [np.empty([num_items] + shape_to_list(expr.shape)[1:], expr.dtype.name) for expr in out_expr]
+        for mb_begin in range(0, num_items, minibatch_size):
+            if print_progress:
+                print('\r%d / %d' % (mb_begin, num_items), end='')
+            mb_end = min(mb_begin + minibatch_size, num_items)
+            mb_in = [src[mb_begin : mb_end] for src in in_arrays]
+            mb_out = tf.get_default_session().run(out_expr, dict(zip(self.input_templates, mb_in)))
+            for dst, src in zip(out_arrays, mb_out):
+                dst[mb_begin : mb_end] = src
+
+        # Done.
+        if print_progress:
+            print('\r%d / %d' % (num_items, num_items))
+        if not return_as_list:
+            out_arrays = out_arrays[0] if len(out_arrays) == 1 else tuple(out_arrays)
+        return out_arrays
+
+    # Returns a list of (name, output_expr, trainable_vars) tuples corresponding to
+    # individual layers of the network. Mainly intended to be used for reporting. 
+
+
+GANanomalyDetection
+def run(self, *in_arrays,
+		return_as_list  = False,    # True = return a list of NumPy arrays, False = return a single NumPy array, or a tuple if there are multiple outputs.
+		print_progress  = False,    # Print progress to the console? Useful for very large input arrays.
+		minibatch_size  = None,     # Maximum minibatch size to use, None = disable batching.
+		num_gpus        = 1,        # Number of GPUs to use.
+		out_mul         = 1.0,      # Multiplicative constant to apply to the output(s).
+		out_add         = 0.0,      # Additive constant to apply to the output(s).
+		out_shrink      = 1,        # Shrink the spatial dimensions of the output(s) by the given factor.
+		out_dtype       = None,     # Convert the output to the specified data type.
+		**dynamic_kwargs):          # Additional keyword arguments to pass into the network construction function.
+
+		assert len(in_arrays) == self.num_inputs
+		num_items = in_arrays[0].shape[0]
+		if minibatch_size is None:
+			minibatch_size = num_items
+		key = str([list(sorted(dynamic_kwargs.items())), num_gpus, out_mul, out_add, out_shrink, out_dtype])
+
+		# Build graph.
+		if key not in self._run_cache:
+			with absolute_name_scope(self.scope + '/Run'), tf.control_dependencies(None):
+				in_split = list(zip(*[tf.split(x, num_gpus) for x in self.input_templates]))
+				out_split = []
+				for gpu in range(num_gpus):
+					with tf.device('/gpu:%d' % gpu):
+						out_expr = self.get_output_for(*in_split[gpu], return_as_list=True, **dynamic_kwargs)
+						if out_mul != 1.0:
+							out_expr = [x * out_mul for x in out_expr]
+						if out_add != 0.0:
+							out_expr = [x + out_add for x in out_expr]
+						if out_shrink > 1:
+							ksize = [1, 1, out_shrink, out_shrink]
+							out_expr = [tf.nn.avg_pool(x, ksize=ksize, strides=ksize, padding='VALID', data_format='NCHW') for x in out_expr]
+						if out_dtype is not None:
+							if tf.as_dtype(out_dtype).is_integer:
+								out_expr = [tf.round(x) for x in out_expr]
+							out_expr = [tf.saturate_cast(x, out_dtype) for x in out_expr]
+						out_split.append(out_expr)
+				self._run_cache[key] = [tf.concat(outputs, axis=0) for outputs in zip(*out_split)]
+
+		# Run minibatches.
+		out_expr = self._run_cache[key]
+		out_arrays = [np.empty([num_items] + shape_to_list(expr.shape)[1:], expr.dtype.name) for expr in out_expr]
+		for mb_begin in range(0, num_items, minibatch_size):
+			if print_progress:
+				print('\r%d / %d' % (mb_begin, num_items), end='')
+			mb_end = min(mb_begin + minibatch_size, num_items)
+			mb_in = [src[mb_begin : mb_end] for src in in_arrays]
+			mb_out = tf.get_default_session().run(out_expr, dict(zip(self.input_templates, mb_in)))
+			for dst, src in zip(out_arrays, mb_out):
+				dst[mb_begin : mb_end] = src
+
+		# Done.
+		if print_progress:
+			print('\r%d / %d' % (num_items, num_items))
+		if not return_as_list:
+			out_arrays = out_arrays[0] if len(out_arrays) == 1 else tuple(out_arrays)
+		return out_arrays
+
+    # Returns a list of (name, output_expr, trainable_vars) tuples corresponding to
+    # individual layers of the network. Mainly intended to be used for reporting. 
+
+
+onnx-tensorflow
+def version_10(cls, node, **kwargs):
+    tensor_dict = kwargs["tensor_dict"]
+    a = tensor_dict[node.inputs[0]]
+    a_scale = tensor_dict[node.inputs[1]]
+    a_zero_point = tensor_dict[node.inputs[2]]
+    b = tensor_dict[node.inputs[3]]
+    b_scale = tensor_dict[node.inputs[4]]
+    b_zero_point = tensor_dict[node.inputs[5]]
+    y_scale = tensor_dict[node.inputs[6]]
+    y_zero_point = tensor_dict[node.inputs[7]]
+    y_dtype = y_zero_point.dtype
+
+    # reshape 1-D a_scale, a_zero_point, y_scale and
+    # y_zero_point so it can broadcast in arithmetic
+    # operations later
+    a_scale_shape = a_scale.get_shape().as_list()
+    if a_scale_shape and a_scale_shape[0] > 1:
+      a_scale = tf.reshape(a_scale, [a_scale_shape[0], 1])
+      a_zero_point = tf.reshape(a_zero_point, [a_scale_shape[0], 1])
+    y_scale_shape = y_scale.get_shape().as_list()
+    if y_scale_shape and y_scale_shape[0] > 1:
+      y_scale = tf.reshape(y_scale, [y_scale_shape[0], 1])
+      y_zero_point = tf.reshape(y_zero_point, [y_scale_shape[0], 1])
+
+    # cast all inputs to float32
+    a = tf.cast(a, tf.float32)
+    a_zero_point = tf.cast(a_zero_point, tf.float32)
+    b = tf.cast(b, tf.float32)
+    b_zero_point = tf.cast(b_zero_point, tf.float32)
+    y_zero_point = tf.cast(y_zero_point, tf.float32)
+
+    # dequantize a and b
+    dequantized_a = tf.subtract(a, a_zero_point)
+    dequantized_a = tf.multiply(dequantized_a, a_scale)
+    dequantized_b = tf.subtract(b, b_zero_point)
+    dequantized_b = tf.multiply(dequantized_b, b_scale)
+
+    # matmul
+    x = tf.matmul(dequantized_a, dequantized_b)
+
+    # quantize x
+    y = tf.divide(x, y_scale)
+    y = tf.round(y)
+    y = tf.add(y, y_zero_point)
+    y = tf.saturate_cast(y, y_dtype)
+
+    return [y] 
+
+
+ml_super_resolution
+def build_summaries(model):
+    """
+    """
+    FLAGS = tf.app.flags.FLAGS
+
+    summaries = {}
+
+    # NOTE: discriminator loss summaries
+    if 'a_loss' in model:
+        summaries['discriminator'] = \
+            tf.summary.scalar('discriminator_loss', model['a_loss'])
+
+    # NOTE: generator loss summaries
+    summaries_generator = []
+
+    if 'g_loss' in model:
+        summaries_generator.append(
+            tf.summary.scalar('generator_loss', model['g_loss']))
+
+    if 'p_loss' in model:
+        summaries_generator.append(
+            tf.summary.scalar('perceptual_loss', model['p_loss']))
+
+    if 't_loss' in model:
+        summaries_generator.append(
+            tf.summary.scalar('texture_loss', model['t_loss']))
+
+    if len(summaries_generator) > 0:
+        summaries['generator'] = tf.summary.merge(summaries_generator)
+
+    # NOTE: build image summaries (real v.s. fake)
+    sd_images = model['bq_images']
+    sr_images = model['sr_images']
+    hd_images = model['hd_images']
+
+    images = tf.concat([sd_images, sr_images, hd_images], axis=2)
+
+    images = tf.reshape(images, [1, FLAGS.batch_size * 128, 3 * 128, 3])
+
+    images = tf.saturate_cast(images * 127.5 + 127.5, tf.uint8)
+
+    summaries['images'] = tf.summary.image('bq_sr_hd', images, max_outputs=4)
+
+    return summaries 
+
+
+ml_super_resolution
+def super_resolve():
+    """
+    """
+    # NOTE: load the frozen graph
+    FLAGS = tf.app.flags.FLAGS
+
+    with tf.gfile.GFile(FLAGS.graph_define_path, 'rb') as gf:
+        graph_def = tf.GraphDef()
+
+        graph_def.ParseFromString(gf.read())
+
+    with tf.Graph().as_default() as graph:
+        tf.import_graph_def(graph_def)
+
+    # NOTE: print tensor names if necessary
+    # print([n.name for n in graph.as_graph_def().node])
+
+    sd_images_tensor = graph.get_tensor_by_name('import/sd_images:0')
+    bq_images_tensor = graph.get_tensor_by_name('import/bq_images:0')
+    sr_images_tensor = graph.get_tensor_by_name('import/sr_images:0')
+
+    # NOTE: extend to graph to encode the results as png
+    bq_image_png_tensor = tf.squeeze(bq_images_tensor, [0])
+    sr_image_png_tensor = tf.squeeze(sr_images_tensor, [0])
+
+    bq_image_png_tensor = tf.saturate_cast(
+        bq_image_png_tensor * 127.5 + 127.5, tf.uint8)
+    sr_image_png_tensor = tf.saturate_cast(
+        sr_image_png_tensor * 127.5 + 127.5, tf.uint8)
+
+    bq_image_png_tensor = tf.image.encode_png(bq_image_png_tensor)
+    sr_image_png_tensor = tf.image.encode_png(sr_image_png_tensor)
+
+    # NOTE: do super-resolving
+    with tf.Session(graph=graph) as session:
+        fetch = [bq_image_png_tensor, sr_image_png_tensor]
+
+        for images in source_images():
+            feeds = {
+                sd_images_tensor: images['sd_image']['image'],
+                bq_images_tensor: images['bq_image']['image'],
+            }
+
+            bq_image_png, sr_image_png = session.run(fetch, feed_dict=feeds)
+
+            # NOTE: output results
+            with tf.gfile.GFile(images['sr_image']['path'], 'wb') as f:
+                f.write(sr_image_png)
+
+            with tf.gfile.GFile(images['bq_image']['path'], 'wb') as f:
+                f.write(bq_image_png) 
+
+
+ml_gans
+def build_summaries(gan):
+    """
+    """
+    g_summaries = []
+    d_summaries = []
+
+    g_summaries.append(
+        tf.summary.scalar('generator loss', gan['generator_loss']))
+
+    d_summaries.append(
+        tf.summary.scalar('discriminator loss', gan['discriminator_loss']))
+
+    for vg in gan['generator_variables_gradients']:
+        variable_name = '{}/variable'.format(vg[0].name)
+        gradient_name = '{}/gradient'.format(vg[0].name)
+
+        g_summaries.append(tf.summary.histogram(variable_name, vg[0]))
+        g_summaries.append(tf.summary.histogram(gradient_name, vg[1]))
+
+    for vg in gan['discriminator_variables_gradients']:
+        variable_name = '{}/variable'.format(vg[0].name)
+        gradient_name = '{}/gradient'.format(vg[0].name)
+
+        d_summaries.append(tf.summary.histogram(variable_name, vg[0]))
+        d_summaries.append(tf.summary.histogram(gradient_name, vg[1]))
+
+    # fake image
+    image_width, image_depth = (64, 3) if FLAGS.use_lsun else (32, 1)
+
+    fake_grid = tf.reshape(
+        gan['generator_fake'],
+        [1, FLAGS.batch_size * image_width, image_width, image_depth])
+    fake_grid = tf.split(fake_grid, FLAGS.summary_col_size, axis=1)
+    fake_grid = tf.concat(fake_grid, axis=2)
+    fake_grid = tf.saturate_cast(fake_grid * 127.5 + 127.5, tf.uint8)
+
+    summary_generator_fake = tf.summary.image(
+        'generated image', fake_grid, max_outputs=1)
+
+    g_summaries_plus = g_summaries + [summary_generator_fake]
+
+    return {
+        'summary_generator': tf.summary.merge(g_summaries),
+        'summary_generator_plus': tf.summary.merge(g_summaries_plus),
+        'summary_discriminator': tf.summary.merge(d_summaries),
+    } 
+
+
+ml_styles
+def transfer():
+    """
+    """
+    if tf.gfile.IsDirectory(FLAGS.ckpt_path):
+        ckpt_source_path = tf.train.latest_checkpoint(FLAGS.ckpt_path)
+    elif tf.gfile.Exists(FLAGS.ckpt_path):
+        ckpt_source_path = FLAGS.ckpt_path
+    else:
+        assert False, 'bad checkpoint'
+
+    assert tf.gfile.Exists(FLAGS.content_path), 'bad content_path'
+    assert not tf.gfile.IsDirectory(FLAGS.content_path), 'bad content_path'
+
+    image_contents = build_contents_reader()
+
+    network = build_style_transfer_network(image_contents, training=False)
+
+    #
+    shape = tf.shape(network['image_styled'])
+
+    new_w = shape[1] - 2 * FLAGS.padding
+    new_h = shape[2] - 2 * FLAGS.padding
+
+    image_styled = tf.slice(
+        network['image_styled'],
+        [0, FLAGS.padding, FLAGS.padding, 0],
+        [-1, new_w, new_h, -1])
+
+    image_styled = tf.squeeze(image_styled, [0])
+    image_styled = image_styled * 127.5 + 127.5
+    image_styled = tf.reverse(image_styled, [2])
+    image_styled = tf.saturate_cast(image_styled, tf.uint8)
+    image_styled = tf.image.encode_jpeg(image_styled)
+
+    image_styled_writer = tf.write_file(FLAGS.styled_path, image_styled)
+
+    with tf.Session() as session:
+        tf.train.Saver().restore(session, ckpt_source_path)
+
+        # make dataset reader work
+        coord = tf.train.Coordinator()
+        threads = tf.train.start_queue_runners(coord=coord)
+
+        session.run(image_styled_writer)
+
+        coord.request_stop()
+        coord.join(threads) 
+
+
+tileGAN
+def run_with_session(self, session, *in_arrays, return_as_list=False,
+            # True = return a list of NumPy arrays, False = return a single NumPy array, or a tuple if there are multiple outputs.
+            print_progress=False,  # Print progress to the console? Useful for very large input arrays.
+            minibatch_size=None,  # Maximum minibatch size to use, None = disable batching.
+            num_gpus=1,  # Number of GPUs to use.
+            out_mul=1.0,  # Multiplicative constant to apply to the output(s).
+            out_add=0.0,  # Additive constant to apply to the output(s).
+            out_shrink=1,  # Shrink the spatial dimensions of the output(s) by the given factor.
+            out_dtype=None,  # Convert the output to the specified data type.
+            **dynamic_kwargs):  # Additional keyword arguments to pass into the network construction function.
+
+        assert len(in_arrays) == self.num_inputs
+        num_items = in_arrays[0].shape[0]
+        if minibatch_size is None:
+            minibatch_size = num_items
+        key = str([list(sorted(dynamic_kwargs.items())), num_gpus, out_mul, out_add, out_shrink, out_dtype])
+
+        # Build graph.
+        if key not in self._run_cache:
+            with absolute_name_scope(self.scope + '/Run'), tf.control_dependencies(None):
+                in_split = list(zip(*[tf.split(x, num_gpus) for x in self.input_templates]))
+                out_split = []
+                for gpu in range(num_gpus):
+                    with tf.device('/gpu:%d' % gpu):
+                        out_expr = self.get_output_for(*in_split[gpu], return_as_list=True, **dynamic_kwargs)
+                        if out_mul != 1.0:
+                            out_expr = [x * out_mul for x in out_expr]
+                        if out_add != 0.0:
+                            out_expr = [x + out_add for x in out_expr]
+                        if out_shrink > 1:
+                            ksize = [1, 1, out_shrink, out_shrink]
+                            out_expr = [
+                                tf.nn.avg_pool(x, ksize=ksize, strides=ksize, padding='VALID', data_format='NCHW')
+                                for x in out_expr]
+                        if out_dtype is not None:
+                            if tf.as_dtype(out_dtype).is_integer:
+                                out_expr = [tf.round(x) for x in out_expr]
+                            out_expr = [tf.saturate_cast(x, out_dtype) for x in out_expr]
+                        out_split.append(out_expr)
+                self._run_cache[key] = [tf.concat(outputs, axis=0) for outputs in zip(*out_split)]
+
+        # Run minibatches.
+        out_expr = self._run_cache[key]
+        out_arrays = [np.empty([num_items] + shape_to_list(expr.shape)[1:], expr.dtype.name) for expr in out_expr]
+        for mb_begin in range(0, num_items, minibatch_size):
+            if print_progress:
+                print('\r%d / %d' % (mb_begin, num_items), end='')
+            mb_end = min(mb_begin + minibatch_size, num_items)
+            mb_in = [src[mb_begin: mb_end] for src in in_arrays]
+            mb_out = session.run(out_expr, dict(zip(self.input_templates, mb_in)))
+            for dst, src in zip(out_arrays, mb_out):
+                dst[mb_begin: mb_end] = src
+
+        # Done.
+        if print_progress:
+            print('\r%d / %d' % (num_items, num_items))
+        if not return_as_list:
+            out_arrays = out_arrays[0] if len(out_arrays) == 1 else tuple(out_arrays)
+        return out_arrays
+
+    # Run this network for the given NumPy array(s), and return the output(s) as NumPy array(s). 
+
+
+tileGAN
+def run(self, *in_arrays,
+        return_as_list  = False,    # True = return a list of NumPy arrays, False = return a single NumPy array, or a tuple if there are multiple outputs.
+        print_progress  = False,    # Print progress to the console? Useful for very large input arrays.
+        minibatch_size  = None,     # Maximum minibatch size to use, None = disable batching.
+        num_gpus        = 1,        # Number of GPUs to use.
+        out_mul         = 1.0,      # Multiplicative constant to apply to the output(s).
+        out_add         = 0.0,      # Additive constant to apply to the output(s).
+        out_shrink      = 1,        # Shrink the spatial dimensions of the output(s) by the given factor.
+        out_dtype       = None,     # Convert the output to the specified data type.
+        **dynamic_kwargs):          # Additional keyword arguments to pass into the network construction function.
+
+        assert len(in_arrays) == self.num_inputs
+        num_items = in_arrays[0].shape[0]
+        if minibatch_size is None:
+            minibatch_size = num_items
+        key = str([list(sorted(dynamic_kwargs.items())), num_gpus, out_mul, out_add, out_shrink, out_dtype])
+
+        # Build graph.
+        if key not in self._run_cache:
+            with absolute_name_scope(self.scope + '/Run'), tf.control_dependencies(None):
+                in_split = list(zip(*[tf.split(x, num_gpus) for x in self.input_templates]))
+                out_split = []
+                for gpu in range(num_gpus):
+                    with tf.device('/gpu:%d' % gpu):
+                        out_expr = self.get_output_for(*in_split[gpu], return_as_list=True, **dynamic_kwargs)
+                        if out_mul != 1.0:
+                            out_expr = [x * out_mul for x in out_expr]
+                        if out_add != 0.0:
+                            out_expr = [x + out_add for x in out_expr]
+                        if out_shrink > 1:
+                            ksize = [1, 1, out_shrink, out_shrink]
+                            out_expr = [tf.nn.avg_pool(x, ksize=ksize, strides=ksize, padding='VALID', data_format='NCHW') for x in out_expr]
+                        if out_dtype is not None:
+                            if tf.as_dtype(out_dtype).is_integer:
+                                out_expr = [tf.round(x) for x in out_expr]
+                            out_expr = [tf.saturate_cast(x, out_dtype) for x in out_expr]
+                        out_split.append(out_expr)
+                self._run_cache[key] = [tf.concat(outputs, axis=0) for outputs in zip(*out_split)]
+
+        # Run minibatches.
+        out_expr = self._run_cache[key]
+        out_arrays = [np.empty([num_items] + shape_to_list(expr.shape)[1:], expr.dtype.name) for expr in out_expr]
+        for mb_begin in range(0, num_items, minibatch_size):
+            if print_progress:
+                print('\r%d / %d' % (mb_begin, num_items), end='')
+            mb_end = min(mb_begin + minibatch_size, num_items)
+            mb_in = [src[mb_begin : mb_end] for src in in_arrays]
+            mb_out = tf.get_default_session().run(out_expr, dict(zip(self.input_templates, mb_in)))
+            for dst, src in zip(out_arrays, mb_out):
+                dst[mb_begin : mb_end] = src
+
+        # Done.
+        if print_progress:
+            print('\r%d / %d' % (num_items, num_items))
+        if not return_as_list:
+            out_arrays = out_arrays[0] if len(out_arrays) == 1 else tuple(out_arrays)
+        return out_arrays
+
+
+    # Returns a list of (name, output_expr, trainable_vars) tuples corresponding to
+    # individual layers of the network. Mainly intended to be used for reporting. 
+
+
+transparent_latent_gan
+def run(self, *in_arrays,
+        return_as_list  = False,    # True = return a list of NumPy arrays, False = return a single NumPy array, or a tuple if there are multiple outputs.
+        print_progress  = False,    # Print progress to the console? Useful for very large input arrays.
+        minibatch_size  = None,     # Maximum minibatch size to use, None = disable batching.
+        num_gpus        = 1,        # Number of GPUs to use.
+        out_mul         = 1.0,      # Multiplicative constant to apply to the output(s).
+        out_add         = 0.0,      # Additive constant to apply to the output(s).
+        out_shrink      = 1,        # Shrink the spatial dimensions of the output(s) by the given factor.
+        out_dtype       = None,     # Convert the output to the specified data type.
+        **dynamic_kwargs):          # Additional keyword arguments to pass into the network construction function.
+
+        assert len(in_arrays) == self.num_inputs
+        num_items = in_arrays[0].shape[0]
+        if minibatch_size is None:
+            minibatch_size = num_items
+        key = str([list(sorted(dynamic_kwargs.items())), num_gpus, out_mul, out_add, out_shrink, out_dtype])
+
+        # Build graph.
+        if key not in self._run_cache:
+            with absolute_name_scope(self.scope + '/Run'), tf.control_dependencies(None):
+                in_split = list(zip(*[tf.split(x, num_gpus) for x in self.input_templates]))
+                out_split = []
+                for gpu in range(num_gpus):
+                    with tf.device('/gpu:%d' % gpu):
+                        out_expr = self.get_output_for(*in_split[gpu], return_as_list=True, **dynamic_kwargs)
+                        if out_mul != 1.0:
+                            out_expr = [x * out_mul for x in out_expr]
+                        if out_add != 0.0:
+                            out_expr = [x + out_add for x in out_expr]
+                        if out_shrink > 1:
+                            ksize = [1, 1, out_shrink, out_shrink]
+                            out_expr = [tf.nn.avg_pool(x, ksize=ksize, strides=ksize, padding='VALID', data_format='NCHW') for x in out_expr]
+                        if out_dtype is not None:
+                            if tf.as_dtype(out_dtype).is_integer:
+                                out_expr = [tf.round(x) for x in out_expr]
+                            out_expr = [tf.saturate_cast(x, out_dtype) for x in out_expr]
+                        out_split.append(out_expr)
+                self._run_cache[key] = [tf.concat(outputs, axis=0) for outputs in zip(*out_split)]
+
+        # Run minibatches.
+        out_expr = self._run_cache[key]
+        out_arrays = [np.empty([num_items] + shape_to_list(expr.shape)[1:], expr.dtype.name) for expr in out_expr]
+        for mb_begin in range(0, num_items, minibatch_size):
+            if print_progress:
+                print('\r%d / %d' % (mb_begin, num_items), end='')
+            mb_end = min(mb_begin + minibatch_size, num_items)
+            mb_in = [src[mb_begin : mb_end] for src in in_arrays]
+            mb_out = tf.get_default_session().run(out_expr, dict(zip(self.input_templates, mb_in)))
+            for dst, src in zip(out_arrays, mb_out):
+                dst[mb_begin : mb_end] = src
+
+        # Done.
+        if print_progress:
+            print('\r%d / %d' % (num_items, num_items))
+        if not return_as_list:
+            out_arrays = out_arrays[0] if len(out_arrays) == 1 else tuple(out_arrays)
+        return out_arrays
+
+    # Returns a list of (name, output_expr, trainable_vars) tuples corresponding to
+    # individual layers of the network. Mainly intended to be used for reporting. 
+
+
+style-image-prior
+def optimize_latent_codes(args):
+	tflib.init_tf()
+
+	with dnnlib.util.open_url(STYLEGAN_MODEL_URL, cache_dir=config.cache_dir) as f:
+		_G, _D, Gs = pickle.load(f)
+
+	latent_code = tf.get_variable(
+		name='latent_code', shape=(1, 18, 512), dtype='float32', initializer=tf.initializers.zeros()
+	)
+
+	generated_img = Gs.components.synthesis.get_output_for(latent_code, randomize_noise=False)
+	generated_img = tf.transpose(generated_img, [0, 2, 3, 1])
+	generated_img = ((generated_img + 1) / 2) * 255
+	generated_img = tf.image.resize_images(generated_img, tuple(args.hr_img_size), method=tf.image.ResizeMethod.NEAREST_NEIGHBOR)
+	generated_lr_img = tf.image.resize_images(generated_img, tuple(args.lr_img_size), method=tf.image.ResizeMethod.NEAREST_NEIGHBOR)
+	generated_img_for_display = tf.saturate_cast(generated_img, tf.uint8)
+
+	lr_img = tf.placeholder(tf.float32, [None, args.lr_img_size[0], args.lr_img_size[1], 3])
+
+	perceptual_model = PerceptualModel(img_size=args.lr_img_size)
+	generated_img_features = perceptual_model(generated_lr_img)
+	target_img_features = perceptual_model(lr_img)
+
+	loss_op = tf.reduce_mean(tf.abs(generated_img_features - target_img_features))
+
+	optimizer = tf.train.AdamOptimizer(learning_rate=args.learning_rate)
+	train_op = optimizer.minimize(loss_op, var_list=[latent_code])
+
+	sess = tf.get_default_session()
+
+	img_names = sorted(os.listdir(args.lr_imgs_dir))
+	for img_name in img_names:
+		img = imageio.imread(os.path.join(args.lr_imgs_dir, img_name))
+
+		sess.run(tf.variables_initializer([latent_code] + optimizer.variables()))
+
+		progress_bar_iterator = tqdm(
+			iterable=range(args.total_iterations),
+			bar_format='{desc}: {percentage:3.0f}% |{bar}| {n_fmt}/{total_fmt}{postfix}',
+			desc=img_name
+		)
+
+		for i in progress_bar_iterator:
+			loss, _ = sess.run(
+				fetches=[loss_op, train_op],
+				feed_dict={
+					lr_img: img[np.newaxis, ...]
+				}
+			)
+
+			progress_bar_iterator.set_postfix_str('loss=%.2f' % loss)
+
+		hr_imgs, latent_codes = sess.run(
+			fetches=[generated_img_for_display, latent_code],
+			feed_dict={
+				lr_img: img[np.newaxis, ...]
+			}
+		)
+
+		imageio.imwrite(os.path.join(args.hr_imgs_dir, img_name), hr_imgs[0])
+		np.savez(file=os.path.join(args.latents_dir, img_name + '.npz'), latent_code=latent_codes[0]) 
+
+
+InterFaceGAN
+def run(self, *in_arrays,
+        return_as_list  = False,    # True = return a list of NumPy arrays, False = return a single NumPy array, or a tuple if there are multiple outputs.
+        print_progress  = False,    # Print progress to the console? Useful for very large input arrays.
+        minibatch_size  = None,     # Maximum minibatch size to use, None = disable batching.
+        num_gpus        = 1,        # Number of GPUs to use.
+        out_mul         = 1.0,      # Multiplicative constant to apply to the output(s).
+        out_add         = 0.0,      # Additive constant to apply to the output(s).
+        out_shrink      = 1,        # Shrink the spatial dimensions of the output(s) by the given factor.
+        out_dtype       = None,     # Convert the output to the specified data type.
+        **dynamic_kwargs):          # Additional keyword arguments to pass into the network construction function.
+
+        assert len(in_arrays) == self.num_inputs
+        num_items = in_arrays[0].shape[0]
+        if minibatch_size is None:
+            minibatch_size = num_items
+        key = str([list(sorted(dynamic_kwargs.items())), num_gpus, out_mul, out_add, out_shrink, out_dtype])
+
+        # Build graph.
+        if key not in self._run_cache:
+            with absolute_name_scope(self.scope + '/Run'), tf.control_dependencies(None):
+                in_split = list(zip(*[tf.split(x, num_gpus) for x in self.input_templates]))
+                out_split = []
+                for gpu in range(num_gpus):
+                    with tf.device('/gpu:%d' % gpu):
+                        out_expr = self.get_output_for(*in_split[gpu], return_as_list=True, **dynamic_kwargs)
+                        if out_mul != 1.0:
+                            out_expr = [x * out_mul for x in out_expr]
+                        if out_add != 0.0:
+                            out_expr = [x + out_add for x in out_expr]
+                        if out_shrink > 1:
+                            ksize = [1, 1, out_shrink, out_shrink]
+                            out_expr = [tf.nn.avg_pool(x, ksize=ksize, strides=ksize, padding='VALID', data_format='NCHW') for x in out_expr]
+                        if out_dtype is not None:
+                            if tf.as_dtype(out_dtype).is_integer:
+                                out_expr = [tf.round(x) for x in out_expr]
+                            out_expr = [tf.saturate_cast(x, out_dtype) for x in out_expr]
+                        out_split.append(out_expr)
+                self._run_cache[key] = [tf.concat(outputs, axis=0) for outputs in zip(*out_split)]
+
+        # Run minibatches.
+        out_expr = self._run_cache[key]
+        out_arrays = [np.empty([num_items] + shape_to_list(expr.shape)[1:], expr.dtype.name) for expr in out_expr]
+        for mb_begin in range(0, num_items, minibatch_size):
+            if print_progress:
+                print('\r%d / %d' % (mb_begin, num_items), end='')
+            mb_end = min(mb_begin + minibatch_size, num_items)
+            mb_in = [src[mb_begin : mb_end] for src in in_arrays]
+            mb_out = tf.get_default_session().run(out_expr, dict(zip(self.input_templates, mb_in)))
+            for dst, src in zip(out_arrays, mb_out):
+                dst[mb_begin : mb_end] = src
+
+        # Done.
+        if print_progress:
+            print('\r%d / %d' % (num_items, num_items))
+        if not return_as_list:
+            out_arrays = out_arrays[0] if len(out_arrays) == 1 else tuple(out_arrays)
+        return out_arrays
+
+    # Returns a list of (name, output_expr, trainable_vars) tuples corresponding to
+    # individual layers of the network. Mainly intended to be used for reporting. 
+
+
