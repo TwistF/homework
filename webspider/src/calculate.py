@@ -40,4 +40,4 @@ def ans():
     # print(total)
     # print(count)
 
-    print("python开发工程师平均薪资为",total/count,"万/月")
+    print("python开发工程师平均薪资为%.2f万/月"%float(total/count))
