@@ -3,7 +3,7 @@
 """
 @author:47539
 @file: crawler2.1.py
-@time: 2020/6/14  17:05
+@time: 2020/6/14  17:06
 """
 
 import bs4
