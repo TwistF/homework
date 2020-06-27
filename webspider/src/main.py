@@ -2,7 +2,7 @@
 #-*- coding:utf-8 _*-
 """
 @author:47539
-@file: crawler2.1.py
+@file: main.py
 @time: 2020/6/14  17:06
 """
 
